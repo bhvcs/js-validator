@@ -1,0 +1,4 @@
+- CommonJS modules (require/module.exports).
+- Keep implementation minimal and readable; no framework-heavy setup.
+- JSON API responses include summary plus per-snippet details.
+- Map lint error lines back to original JSP lines for usability.

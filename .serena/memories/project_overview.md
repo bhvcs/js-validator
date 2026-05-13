@@ -1,0 +1,4 @@
+- Purpose: Validate JavaScript syntax embedded in JSP files before runtime.
+- Stack: Node.js, Express, ESLint (v8 API).
+- Structure: src/extractor.js (JSP <script> extraction), src/linter.js (ESLint wrapper), src/server.js (HTTP API), src/cli.js (one-shot CLI), samples/sample.jsp.
+- Platform: Windows development environment.

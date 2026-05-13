@@ -1,0 +1,19 @@
+{
+  "name": "js-validator",
+  "version": "1.0.0",
+  "description": "Extract JavaScript from JSP files and validate syntax with ESLint",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "check:sample": "node src/cli.js samples/sample.jsp",
+    "check:deps-sample": "node src/cli.js samples/sample-with-deps.jsp",
+    "check:deps-sample:no-deps": "node src/cli.js samples/sample-with-deps.jsp --no-deps"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "eslint": "^8.57.1",
+    "express": "^5.2.1"
+  }
+}

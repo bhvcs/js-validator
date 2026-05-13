@@ -1,0 +1,4 @@
+- Run npm run check:sample.
+- Optionally run server and test /lint/file endpoint.
+- Ensure no diagnostics in src/*.js via editor Problems view.
+- Keep README examples aligned with actual endpoints and scripts.

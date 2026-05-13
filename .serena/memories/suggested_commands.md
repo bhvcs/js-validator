@@ -1,0 +1,4 @@
+- Install deps: cmd /c npm install
+- Start server: cmd /c npm start
+- Validate sample with CLI: cmd /c npm run check:sample
+- API check (PowerShell): Invoke-RestMethod -Method Post -Uri http://localhost:3000/lint/file -ContentType 'application/json' -Body '{"jspPath":"samples/sample.jsp"}' | ConvertTo-Json -Depth 8
