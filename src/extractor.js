@@ -52,10 +52,12 @@ function extractJavaScriptFromJsp(jspContent) {
       continue;
     }
 
-    const code = stripJspFragments(rawCode).trim();
-    if (!code) {
+    const strippedCode = stripJspFragments(rawCode);
+    if (!strippedCode.trim()) {
       continue;
     }
+
+    const code = strippedCode.replace(/[\t ]+$/gm, "").replace(/\s+$/, "");
 
     const scriptStartIndex = match.index + match[0].indexOf(rawCode);
     snippets.push({
@@ -91,7 +93,24 @@ function extractExternalScriptSources(jspContent) {
   return sources;
 }
 
+function extractIncludeDirectives(jspContent) {
+  // Extract file paths from <%@ include file="..." %> directives
+  const includeRegex = /<%@\s*include\s+file\s*=\s*["']([^"']+)["']\s*%>/gi;
+  const files = [];
+  let match;
+
+  while ((match = includeRegex.exec(jspContent)) !== null) {
+    const filePath = match[1];
+    if (filePath) {
+      files.push(filePath);
+    }
+  }
+
+  return files;
+}
+
 module.exports = {
   extractExternalScriptSources,
-  extractJavaScriptFromJsp
+  extractJavaScriptFromJsp,
+  extractIncludeDirectives
 };

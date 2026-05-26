@@ -37,12 +37,9 @@ function buildAnnotatedJsp(jspContent, lintResult) {
   const output = [];
   for (let i = 0; i < lines.length; i += 1) {
     const lineNumber = i + 1;
-    output.push(lines[i]);
-
     const lineIssues = issuesByLine.get(lineNumber) || [];
-    for (const issue of lineIssues) {
-      output.push(toComment(issue));
-    }
+    const suffix = lineIssues.map((issue) => toComment(issue)).join(" ");
+    output.push(suffix ? `${lines[i]} ${suffix}` : lines[i]);
   }
 
   return output.join(eol);
@@ -64,8 +61,21 @@ async function writeAnnotatedJspFile(sourceFilePath, jspContent, lintResult) {
   };
 }
 
+async function writeAnnotatedSourceFiles(sourceFilePath, jspContent, lintResult) {
+  const { annotatedPath, annotatedContent } = await writeAnnotatedJspFile(sourceFilePath, jspContent, lintResult);
+
+  return [
+    {
+      sourceFile: sourceFilePath,
+      annotatedPath,
+      annotatedContent
+    }
+  ];
+}
+
 module.exports = {
   buildAnnotatedJsp,
   getAnnotatedFilePath,
-  writeAnnotatedJspFile
+  writeAnnotatedJspFile,
+  writeAnnotatedSourceFiles
 };

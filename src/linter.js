@@ -1,17 +1,30 @@
 const { ESLint } = require("eslint");
+const { detectJqueryTypos } = require("./typecheck");
+
+const DEFAULT_GLOBALS = {
+  $: "readonly"
+};
 
 const eslint = new ESLint({
   useEslintrc: false,
   baseConfig: {
+    extends: ["eslint:recommended"],
     env: {
       browser: true,
+      jquery: true,
       es2022: true
     },
+    globals: DEFAULT_GLOBALS,
     parserOptions: {
       ecmaVersion: "latest",
       sourceType: "script"
     },
-    rules: {}
+    rules: {
+      // 핵심: 정의되지 않은 함수/식별자 사용을 정적으로 검출.
+      "no-undef": "error",
+      "no-unused-vars": "warn",
+      "no-unused-expressions": "error"
+    }
   }
 });
 
@@ -55,7 +68,7 @@ function mapCombinedMessageToSource(message, block) {
   };
 }
 
-async function lintCombinedSnippets(snippets, options) {
+async function runCombinedLintPass(snippets, options) {
   const blocks = [];
   const codeParts = [];
   let currentLine = 1;
@@ -115,27 +128,127 @@ async function lintCombinedSnippets(snippets, options) {
   };
 }
 
-async function lintExtractedSnippets(snippets, options = {}) {
-  if (options.combine === true) {
-    return lintCombinedSnippets(snippets, options);
+function isParsingError(message) {
+  return message.ruleId == null && typeof message.message === "string" && message.message.startsWith("Parsing error");
+}
+
+async function lintCombinedSnippets(snippets, options) {
+  const firstPass = await runCombinedLintPass(snippets, options);
+
+  const parseErrorSnippetIds = new Set();
+  for (const detail of firstPass.details) {
+    if (detail.messages.some((message) => isParsingError(message))) {
+      parseErrorSnippetIds.add(detail.snippetId);
+    }
   }
 
-  const details = [];
+  if (parseErrorSnippetIds.size === 0) {
+    return firstPass;
+  }
+
+  const parseableSnippets = snippets.filter((snippet) => !parseErrorSnippetIds.has(snippet.id));
+  const secondPass = parseableSnippets.length > 0
+    ? await runCombinedLintPass(parseableSnippets, options)
+    : { details: [] };
+
+  const secondPassById = new Map(secondPass.details.map((detail) => [detail.snippetId, detail]));
+  const mergedDetails = [];
 
   for (const snippet of snippets) {
-    const messages = await lintSnippet(snippet);
-    details.push({
-      snippetId: snippet.id,
-      startLineInJsp: snippet.startLineInJsp,
-      messages
-    });
+    if (parseErrorSnippetIds.has(snippet.id)) {
+      const firstDetail = firstPass.details.find((detail) => detail.snippetId === snippet.id);
+      if (firstDetail) {
+        mergedDetails.push(firstDetail);
+      }
+      continue;
+    }
+
+    const secondDetail = secondPassById.get(snippet.id);
+    if (secondDetail) {
+      mergedDetails.push(secondDetail);
+      continue;
+    }
+
+    const firstDetail = firstPass.details.find((detail) => detail.snippetId === snippet.id);
+    if (firstDetail) {
+      mergedDetails.push(firstDetail);
+    }
   }
 
-  const allMessages = details.flatMap((item) => item.messages);
+  const allMessages = mergedDetails.flatMap((detail) => detail.messages);
   return {
     ok: allMessages.length === 0,
     totalIssues: allMessages.length,
-    details
+    details: mergedDetails
+  };
+}
+
+async function lintExtractedSnippets(snippets, options = {}) {
+  let baseResult;
+
+  if (options.combine === true) {
+    baseResult = await lintCombinedSnippets(snippets, options);
+  } else {
+    const details = [];
+
+    for (const snippet of snippets) {
+      const messages = await lintSnippet(snippet);
+      details.push({
+        snippetId: snippet.id,
+        startLineInJsp: snippet.startLineInJsp,
+        sourceType: snippet.sourceType || "jsp-inline",
+        sourceFile: snippet.sourceFile,
+        messages
+      });
+    }
+
+    const allMessages = details.flatMap((item) => item.messages);
+    baseResult = {
+      ok: allMessages.length === 0,
+      totalIssues: allMessages.length,
+      details
+    };
+  }
+
+  const jqueryMessages = await detectJqueryTypos(snippets);
+  if (jqueryMessages.length === 0) {
+    return baseResult;
+  }
+
+  const detailBySnippetId = new Map((baseResult.details || []).map((detail) => [detail.snippetId, detail]));
+
+  for (const issue of jqueryMessages) {
+    if (!detailBySnippetId.has(issue.snippetId)) {
+      const fallbackSnippet = snippets.find((snippet) => snippet.id === issue.snippetId);
+      const detail = {
+        snippetId: issue.snippetId,
+        startLineInJsp: issue.startLineInJsp,
+        sourceType: issue.sourceType || fallbackSnippet?.sourceType || "jsp-inline",
+        sourceFile: issue.sourceFile || fallbackSnippet?.sourceFile,
+        messages: []
+      };
+      detailBySnippetId.set(issue.snippetId, detail);
+      baseResult.details.push(detail);
+    }
+
+    const detail = detailBySnippetId.get(issue.snippetId);
+    const duplicate = detail.messages.some(
+      (message) => message.ruleId === issue.ruleId
+        && message.message === issue.message
+        && message.sourceLine === issue.sourceLine
+        && message.sourceColumn === issue.sourceColumn
+    );
+
+    if (!duplicate) {
+      detail.messages.push(issue);
+    }
+  }
+
+  const allMessages = baseResult.details.flatMap((detail) => detail.messages || []);
+  return {
+    ok: allMessages.length === 0,
+    totalIssues: allMessages.length,
+    details: baseResult.details
   };
 }
 
